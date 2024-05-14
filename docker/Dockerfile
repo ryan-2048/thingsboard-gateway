@@ -5,7 +5,10 @@ ARG BUILDPLATFORM
 
 RUN echo "Running on $BUILDPLATFORM, building for $TARGETPLATFORM" > /log
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN mkdir -p /default-config/config /default-config/extensions/ &&  \
+    cp -r /thingsboard_gateway/config/* /default-config/config/ &&  \
+    cp -r /thingsboard_gateway/extensions/* /default-config/extensions &&  \
+    apt-get update && apt-get install -y --no-install-recommends \
     gcc python3-dev build-essential libssl-dev libffi-dev zlib1g-dev \
     python3-grpcio curl pkg-config libssl-dev &&  \
     case "$TARGETPLATFORM" in \
@@ -41,7 +44,7 @@ ENV PATH="/root/.cargo/bin:/root/.local/bin:$PATH" \
     extensions="/thingsboard_gateway/extensions" \
     logs="/thingsboard_gateway/logs"
 
-COPY requirements.txt .
+COPY . .
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir -r requirements.txt
 
