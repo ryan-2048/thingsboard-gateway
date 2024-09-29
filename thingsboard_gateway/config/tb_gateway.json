@@ -1,9 +1,9 @@
 {
   "thingsboard": {
-    "host": "thingsboard.cloud",
+    "host": "192.168.11.80",
     "port": 1883,
     "remoteShell": false,
-    "remoteConfiguration": true,
+    "remoteConfiguration": false,
     "latencyDebugMode": false,
     "statistics": {
       "enable": true,
@@ -21,7 +21,7 @@
     "handleDeviceRenaming": true,
     "security": {
       "type": "accessToken",
-      "accessToken": "YOUR_ACCESS_TOKEN"
+      "accessToken": "yWexn6PmLdiPcEG3lYaV"
     },
     "qos": 1,
     "checkingDeviceActivity": {
@@ -58,5 +58,11 @@
     "minTimeBetweenPingsMs": 10000,
     "minPingIntervalWithoutDataMs": 5000
   },
-  "connectors": []
+  "connectors": [
+    {
+      "type": "modbus",
+      "name": "Modbus Connector",
+      "configuration": "modbus.json"
+    }
+  ]
 }

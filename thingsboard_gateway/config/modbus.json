@@ -2,13 +2,13 @@
   "master": {
     "slaves": [
       {
-        "host": "127.0.0.1",
-        "port": 5021,
+        "host": "192.168.11.143",
+        "port": 613,
         "type": "tcp",
         "method": "socket",
         "timeout": 35,
-        "byteOrder": "LITTLE",
-        "wordOrder": "LITTLE",
+        "byteOrder": "BIG",
+        "wordOrder": "BIG",
         "retries": true,
         "retryOnEmpty": true,
         "retryOnInvalid": true,
@@ -21,91 +21,122 @@
         "waitAfterFailedAttemptsMs": 300000,
         "attributes": [
           {
-            "tag": "string_read",
-            "type": "string",
-            "functionCode": 4,
-            "objectsCount": 4,
-            "address": 1
-          },
-          {
-            "tag": "bits_read",
-            "type": "bits",
-            "functionCode": 4,
-            "objectsCount": 1,
-            "address": 5
-          },
-          {
-            "tag": "16int_read",
+            "address": 0,
+            "functionCode": 3,
+            "tag": "test0",
             "type": "16int",
-            "functionCode": 4,
             "objectsCount": 1,
-            "address": 7
+            "pollPeriod": 5000
           },
           {
-            "tag": "32int_read_divider",
+            "address": 1,
+            "functionCode": 3,
+            "tag": "test1",
+            "type": "bits",
+            "objectsCount": 1,
+            "startBit": 0,
+            "endBit": 0,
+            "pollPeriod": 5000
+          },
+          {
+            "address": 2,
+            "functionCode": 3,
+            "tag": "test2",
             "type": "32int",
-            "functionCode": 4,
             "objectsCount": 2,
-            "address": 8,
-            "divider": 10
+            "pollPeriod": 5000
           },
           {
-            "tag": "32int_read",
-            "type": "32int",
-            "functionCode": 4,
+            "address": 4,
+            "functionCode": 3,
+            "tag": "test4",
+            "type": "32uint",
             "objectsCount": 2,
-            "address": 11
+            "pollPeriod": 5000
           },
           {
-            "tag": "64int_read",
+            "address": 6,
+            "functionCode": 3,
+            "tag": "test6",
             "type": "64int",
-            "functionCode": 4,
             "objectsCount": 4,
-            "address": 13
+            "pollPeriod": 5000
+          },
+          {
+            "address": 11,
+            "functionCode": 3,
+            "tag": "test11",
+            "type": "16int",
+            "objectsCount": 1,
+            "pollPeriod": 500
+          },
+          {
+            "address": 13,
+            "functionCode": 3,
+            "tag": "test13",
+            "type": "16int",
+            "objectsCount": 1,
+            "pollPeriod": 500
           }
         ],
         "timeseries": [
           {
-            "tag": "16uint_read",
-            "type": "16uint",
-            "functionCode": 4,
-            "objectsCount": 2,
-            "address": 18
+            "address": 0,
+            "functionCode": 3,
+            "tag": "test0",
+            "type": "16int",
+            "objectsCount": 1,
+            "pollPeriod": 5000
           },
           {
-            "tag": "32uint_read",
+            "address": 1,
+            "functionCode": 3,
+            "tag": "test1",
+            "type": "bits",
+            "objectsCount": 1,
+            "startBit": 0,
+            "endBit": 0,
+            "pollPeriod": 5000
+          },
+          {
+            "address": 2,
+            "functionCode": 3,
+            "tag": "test2",
+            "type": "32int",
+            "objectsCount": 2,
+            "pollPeriod": 5000
+          },
+          {
+            "address": 4,
+            "functionCode": 3,
+            "tag": "test4",
             "type": "32uint",
-            "functionCode": 4,
-            "objectsCount": 4,
-            "address": 20
-          },
-          {
-            "tag": "64uint_read",
-            "type": "64uint",
-            "functionCode": 4,
-            "objectsCount": 1,
-            "address": 24
-          },
-          {
-            "tag": "16float_read",
-            "type": "16float",
-            "functionCode": 4,
-            "objectsCount": 1,
-            "address": 25
-          },
-          {
-            "tag": "32float_read",
-            "type": "32float",
-            "functionCode": 4,
             "objectsCount": 2,
-            "address": 26
+            "pollPeriod": 5000
           },
           {
-            "tag": "64float_read",
-            "type": "64float",
-            "functionCode": 4,
+            "address": 6,
+            "functionCode": 3,
+            "tag": "test6",
+            "type": "64int",
             "objectsCount": 4,
-            "address": 28
+            "pollPeriod": 5000
+          },
+          {
+            "address": 11,
+            "functionCode": 3,
+            "tag": "test11",
+            "type": "16int",
+            "objectsCount": 1,
+            "pollPeriod": 500
+          },
+          {
+            "address": 13,
+            "functionCode": 3,
+            "tag": "test13",
+            "type": "16int",
+            "objectsCount": 1,
+            "pollPeriod": 500
           }
         ],
         "attributeUpdates": [
@@ -218,5 +249,6 @@
         "rpc": []
       }
     }
-  }
+  },
+  "id": "7a751fbb-3fb0-4c80-a860-774d19d85036"
 }

@@ -35,6 +35,69 @@ class Slave(Thread):
 
         self.byte_order = kwargs.get('byteOrder', 'LITTLE')
         self.word_order = kwargs.get('wordOrder', 'LITTLE')
+
+        attributes_data = kwargs.get('attributes', [])
+        timeseries_data = kwargs.get('timeseries', [])
+        once_register_count = kwargs.get('onceRegisterCount', 100)
+        
+        attributes_sorted_data = sorted(attributes_data, key=lambda x: x['address'])
+
+        attributes_data_result = []
+        attributes_current_group = None
+        attributes_last_address = -1
+
+        for item in attributes_sorted_data:
+            if  attributes_current_group is None or item['pollPeriod'] != attributes_current_group['pollPeriod'] or item['address'] - attributes_last_address > attributes_current_group['details'][-1]['objectsCount'] or len(attributes_current_group['details']) >= once_register_count:
+                if attributes_current_group is not None:
+                    attributes_current_group['objectsCount'] = sum(detail['objectsCount'] for detail in attributes_current_group['details'])
+                    attributes_data_result.append(attributes_current_group)
+
+                attributes_current_group = {
+                    'tag': len(attributes_data_result),
+                    'functionCode': item['functionCode'],
+                    'address': item['address'],
+                    'pollPeriod': item['pollPeriod'],
+                    'details': [item]
+                }
+            else:
+                attributes_current_group['details'].append(item)
+
+            attributes_last_address = item['address'] + item['objectsCount'] - 1
+
+        if attributes_current_group is not None:
+            attributes_current_group['objectsCount'] = sum(detail['objectsCount'] for detail in attributes_current_group['details'])
+            attributes_data_result.append(attributes_current_group)
+
+        timeseries_sorted_data = sorted(timeseries_data, key=lambda x: x['address'])
+
+        timeseries_data_result = []
+        timeseries_current_group = None
+        timeseries_last_address = -1
+
+        for item in timeseries_sorted_data:
+            if timeseries_current_group is None or item['pollPeriod'] != timeseries_current_group['pollPeriod'] or item['address'] - timeseries_last_address > timeseries_current_group['details'][-1]['objectsCount'] or len(timeseries_current_group['details']) >= once_register_count:
+                if timeseries_current_group is not None:
+                    timeseries_current_group['objectsCount'] = sum(detail['objectsCount'] for detail in timeseries_current_group['details'])
+                    timeseries_data_result.append(timeseries_current_group)
+
+                timeseries_current_group = {
+                    'tag': len(timeseries_data_result),
+                    'functionCode': item['functionCode'],
+                    'address': item['address'],
+                    'pollPeriod': item['pollPeriod'],
+                    'details': [item]
+                }
+            else:
+                timeseries_current_group['details'].append(item)
+
+            timeseries_last_address = item['address'] + item['objectsCount'] - 1
+
+        if timeseries_current_group is not None:
+            timeseries_current_group['objectsCount'] = sum(detail['objectsCount'] for detail in timeseries_current_group['details'])
+            timeseries_data_result.append(timeseries_current_group)
+
+        print(timeseries_data_result)
+
         self.config = {
             'unitId': kwargs['unitId'],
             'deviceType': kwargs.get('deviceType', 'default'),
@@ -58,10 +121,11 @@ class Slave(Thread):
             'retry_on_invalid': kwargs.get('retryOnInvalid', False),
             'method': kwargs.get('method', 'rtu'),
             'baudrate': kwargs.get('baudrate', 19200),
-            'attributes': kwargs.get('attributes', []),
-            'timeseries': kwargs.get('timeseries', []),
+            'attributes': attributes_data_result,
+            'timeseries': timeseries_data_result,
             'attributeUpdates': kwargs.get('attributeUpdates', []),
-            'rpc': kwargs.get('rpc', [])
+            'rpc': kwargs.get('rpc', []),
+            'readSleep': kwargs.get('readSleep', 0),
         }
 
         self.__basic_device_report_strategy_config = (
@@ -71,7 +135,7 @@ class Slave(Thread):
 
         self.callback = kwargs['callback']
 
-        self.__last_polled_time = None
+        self.__last_polled_time = {'timeseries': {}, 'attributes': {}}
         self.__last_checked_time = monotonic()
         self.daemon = True
         self.stop = False
@@ -102,15 +166,22 @@ class Slave(Thread):
         self.start()
 
     def timer(self):
-        self.callback(self, RequestType.POLL)
-        self.__last_polled_time = monotonic()
-
+        device_config = {'timeseries': {}, 'attributes': {}}
+        for config_item in device_config:
+            for index, item in enumerate(self.config[config_item]):
+                self.callback(self, RequestType.POLL, {"type": config_item, "index": index})
+                self.__last_polled_time[config_item][index] = {"ts": monotonic(), "period": item['pollPeriod'] / 1000}
+        
         while not self.stop:
             try:
                 current_monotonic = monotonic()
-                if current_monotonic - self.__last_polled_time >= self.poll_period:
-                    self.callback(self, RequestType.POLL)
-                    self.__last_polled_time = current_monotonic
+                for config_item in device_config:
+                    for index in self.__last_polled_time[config_item]:
+                        if current_monotonic - self.__last_polled_time[config_item][index]['ts'] >= self.__last_polled_time[config_item][index]['period']:
+                            self.callback(self, RequestType.POLL, {"type": config_item, "index": index})
+                            self.__last_polled_time[config_item][index]['ts'] = monotonic()
+                            if (self.config['readSleep'] != 0):
+                                sleep(self.config['readSleep'])
                 if current_monotonic - self.__last_checked_time >= 1.0:
                     self.__check_data_to_send_periodically(current_monotonic)
                     self.__last_checked_time = current_monotonic
@@ -150,20 +221,22 @@ class Slave(Thread):
                 report_data_config['next_send_monotonic_ms'] = current_monotonic + report_data_config[REPORT_PERIOD_PARAMETER]
 
     def __init_cache_for_data(self):
-        for index, key_config in enumerate(self.config[TIMESERIES_PARAMETER]):
-            key = key_config.get('key', key_config.get('tag'))
-            self.cached_data[LAST_PREFIX + TELEMETRY_PARAMETER][key] = {
-                **self.__get_report_strategy_from_config(key_config, self.__basic_device_report_strategy_config),
-                'next_send_monotonic_ms': 0,
-                'previous_value': None
-            }
-        for index, key_config in enumerate(self.config[ATTRIBUTES_PARAMETER]):
-            key = key_config.get('key', key_config.get('tag'))
-            self.cached_data[LAST_PREFIX + ATTRIBUTES_PARAMETER][key] = {
-                **self.__get_report_strategy_from_config(key_config, self.__basic_device_report_strategy_config),
-                'next_send_monotonic_ms': 0,
-                'previous_value': None
-            }
+        for indexs, key_configs in enumerate(self.config[TIMESERIES_PARAMETER]):
+            for index, key_config in enumerate(key_configs['details']):
+                key = key_config.get('key', key_config.get('tag'))
+                self.cached_data[LAST_PREFIX + TELEMETRY_PARAMETER][key] = {
+                    **self.__get_report_strategy_from_config(key_config, self.__basic_device_report_strategy_config),
+                    'next_send_monotonic_ms': 0,
+                    'previous_value': None
+                }
+        for indexs, key_configs in enumerate(self.config[ATTRIBUTES_PARAMETER]):
+            for index, key_config in enumerate(key_configs['details']):
+                key = key_config.get('key', key_config.get('tag'))
+                self.cached_data[LAST_PREFIX + ATTRIBUTES_PARAMETER][key] = {
+                    **self.__get_report_strategy_from_config(key_config, self.__basic_device_report_strategy_config),
+                    'next_send_monotonic_ms': 0,
+                    'previous_value': None
+                }
 
     def update_cached_data_and_check_is_data_should_be_send(self, configuration_section, key, value) -> bool:
         section_with_prefix = LAST_PREFIX + configuration_section
