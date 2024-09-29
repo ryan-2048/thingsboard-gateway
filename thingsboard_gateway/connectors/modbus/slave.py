@@ -96,8 +96,6 @@ class Slave(Thread):
             timeseries_current_group['objectsCount'] = sum(detail['objectsCount'] for detail in timeseries_current_group['details'])
             timeseries_data_result.append(timeseries_current_group)
 
-        print(timeseries_data_result)
-
         self.config = {
             'unitId': kwargs['unitId'],
             'deviceType': kwargs.get('deviceType', 'default'),
