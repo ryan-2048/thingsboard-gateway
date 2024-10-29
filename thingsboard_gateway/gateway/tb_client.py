@@ -245,7 +245,8 @@ class TBClient(threading.Thread):
         self.__paused = False
 
     def is_connected(self):
-        return self.__is_connected and self.client.rate_limits_received
+        # return self.__is_connected and self.client.rate_limits_received
+        return self.__is_connected
 
     def _on_connect(self, client, userdata, flags, result_code, *extra_params):
         self.__logger.debug('TB client %s connected to ThingsBoard', str(client))

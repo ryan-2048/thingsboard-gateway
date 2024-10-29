@@ -103,10 +103,6 @@ class BytesModbusUplinkConverter(ModbusConverter):
                                                                              wordorder=word_endian_order)
                             assert decoder is not None
                             decoded_data = self.decode_from_registers(decoder, configuration)
-                            if configuration.get("divider"):
-                                decoded_data = float(decoded_data) / float(configuration["divider"])
-                            elif configuration.get("multiplier"):
-                                decoded_data = decoded_data * configuration["multiplier"]
                     else:
                         self._log.exception(response)
                         decoded_data = None
@@ -114,7 +110,8 @@ class BytesModbusUplinkConverter(ModbusConverter):
                         return decoded_data
                     self._log.debug("datatype: %s \t key: %s \t value: %s", self.__datatypes[config_data], tag, str(decoded_data))
                     if decoded_data is not None:
-                        self.__result[self.__datatypes[config_data]].append({tag: decoded_data})
+                        for _data in decoded_data:
+                            self.__result[self.__datatypes[config_data]].append(_data)
                 except Exception as e:
                     self._log.exception(e)
                     StatisticsService.count_connector_message(self._log.name, 'convertersMsgDropped')
@@ -127,11 +124,8 @@ class BytesModbusUplinkConverter(ModbusConverter):
 
         return self.__result
 
-    def decode_from_registers(self, decoder, configuration):
-        type_ = configuration["type"]
-        objects_count = configuration.get("objectsCount",
-                                          configuration.get("registersCount", configuration.get("registerCount", 1)))
-        lower_type = type_.lower()
+    def decode_from_registers(self, decoder, configurations):
+        result_datas = []
 
         decoder_functions = {
             'string': decoder.decode_string,
@@ -149,68 +143,113 @@ class BytesModbusUplinkConverter(ModbusConverter):
             '64int': decoder.decode_64bit_int,
             '64uint': decoder.decode_64bit_uint,
             '64float': decoder.decode_64bit_float,
+            'skip': decoder.skip_bytes,
             }
 
-        decoded = None
+        decodeds = []
+        last_decoded = None;
+        last_address = None;
+        for configuration in configurations.get("details"):
+            tag_ = configuration["tag"]
+            type_ = configuration["type"]
+            objects_count = configuration.get("objectsCount",
+                                            configuration.get("registersCount", configuration.get("registerCount", 1)))
+            lower_type = type_.lower()
 
-        if lower_type in ['bit', 'bits']:
-            decoded = decoder_functions[type_]()
-            decoded_lastbyte = decoder_functions[type_]()
-            decoded += decoded_lastbyte
-            decoded = decoded[len(decoded)-objects_count:]
+            decoded = None
 
-        elif lower_type == "string":
-            decoded = decoder_functions[type_](objects_count * 2)
-
-        elif lower_type == "bytes":
-            decoded = decoder_functions[type_](size=objects_count * 2)
-
-        elif decoder_functions.get(lower_type) is not None:
-            decoded = decoder_functions[lower_type]()
-
-        elif lower_type in ['int', 'long', 'integer']:
-            type_ = str(objects_count * 16) + "int"
-            assert decoder_functions.get(type_) is not None
-            decoded = decoder_functions[type_]()
-
-        elif lower_type in ["double", "float"]:
-            type_ = str(objects_count * 16) + "float"
-            assert decoder_functions.get(type_) is not None
-            decoded = decoder_functions[type_]()
-
-        elif lower_type == 'uint':
-            type_ = str(objects_count * 16) + "uint"
-            assert decoder_functions.get(type_) is not None
-            decoded = decoder_functions[type_]()
-
-        else:
-            self._log.error("Unknown type: %s", type_)
-
-        if isinstance(decoded, int):
-            result_data = decoded
-        elif isinstance(decoded, bytes) and lower_type == "string":
-            try:
-                result_data = decoded.decode('UTF-8')
-            except UnicodeDecodeError as e:
-                self._log.error("Error decoding string from bytes, will be saved as hex: %s", decoded, exc_info=e)
-                result_data = decoded.hex()
-        elif isinstance(decoded, bytes) and lower_type == "bytes":
-            result_data = decoded.hex()
-        elif isinstance(decoded, list):
-            if configuration.get('bit') is not None:
-                result_data = int(decoded[configuration['bit'] if
-                configuration['bit'] < len(decoded) else len(decoded) - 1])
+            if configuration['address'] == last_address:
+                decoded = last_decoded
             else:
-                bitAsBoolean = configuration.get('bitTargetType', 'bool') == 'bool'
-                if objects_count == 1:
-                    result_data = bool(decoded[-1]) if bitAsBoolean else int(decoded[-1])
-                else:
-                    result_data = [bool(bit) if bitAsBoolean else int(bit) for bit in decoded]
-        elif isinstance(decoded, float):
-            result_data = decoded
-        elif decoded is not None:
-            result_data = int(decoded, 16)
-        else:
-            result_data = decoded
+                if lower_type in ['bit', 'bits']:
+                    if configuration['functionCode'] in [3, 4]:
+                        decoded_lastbyte = decoder_functions[type_]()
+                        decoded = decoder_functions[type_]()
+                        decoded += decoded_lastbyte
+                    elif configuration['functionCode'] in [1, 2]:
+                        decoded = decoder_functions[type_]()
+                        decoded_lastbyte = decoder_functions[type_]()
+                        decoded += decoded_lastbyte
+                        decodeds[:0] = decoded
+                        # decoded = decoded[len(decoded)-objects_count:]
+                        decoded = decodeds.pop()
 
-        return result_data
+                elif lower_type == "string":
+                    decoded = decoder_functions[type_](objects_count * 2)
+
+                elif lower_type == "bytes":
+                    decoded = decoder_functions[type_](size=objects_count * 2)
+
+                elif decoder_functions.get(lower_type) is not None:
+                    decoded = decoder_functions[lower_type]()
+
+                elif lower_type in ['int', 'long', 'integer']:
+                    type_ = str(objects_count * 16) + "int"
+                    assert decoder_functions.get(type_) is not None
+                    decoded = decoder_functions[type_]()
+
+                elif lower_type in ["double", "float"]:
+                    type_ = str(objects_count * 16) + "float"
+                    assert decoder_functions.get(type_) is not None
+                    decoded = decoder_functions[type_]()
+
+                elif lower_type == 'uint':
+                    type_ = str(objects_count * 16) + "uint"
+                    assert decoder_functions.get(type_) is not None
+                    decoded = decoder_functions[type_]()
+
+                elif lower_type == "skip":
+                    decoded = decoder_functions[type_](size=objects_count * 2)
+
+                else:
+                    self._log.error("Unknown type: %s", type_)
+
+            last_decoded = decoded
+            last_address = configuration['address']
+
+            if isinstance(decoded, int):
+                result_data = decoded
+            elif isinstance(decoded, bytes) and lower_type == "string":
+                try:
+                    result_data = decoded.decode('UTF-8')
+                except UnicodeDecodeError as e:
+                    self._log.error("Error decoding string from bytes, will be saved as hex: %s", decoded, exc_info=e)
+                    result_data = decoded.hex()
+            elif isinstance(decoded, bytes) and lower_type == "bytes":
+                result_data = decoded.hex()
+            elif isinstance(decoded, list):
+                if configuration.get('startBit') is not None:
+                    result_data = decoded[configuration.get('startBit', 0): configuration.get('endBit', 0) + 1]
+                    if len(result_data) == 1 and configuration.get('bitTargetType', 'bool') == 'bool':
+                        result_data = result_data[0]
+                    else:
+                        result_data = int(''.join(str(1 if i else 0) for i in result_data), base=2)
+                else:
+                    if configuration.get('bit') is not None:
+                        result_data = int(decoded[configuration['bit'] if
+                        configuration['bit'] < len(decoded) else len(decoded) - 1])
+                    else:
+                        bitAsBoolean = configuration.get('bitTargetType', 'bool') == 'bool'
+                        if objects_count == 1:
+                            result_data = bool(decoded[-1]) if bitAsBoolean else int(decoded[-1])
+                        else:
+                            result_data = [bool(bit) if bitAsBoolean else int(bit) for bit in decoded]
+            elif isinstance(decoded, float):
+                result_data = decoded
+            elif decoded is not None:
+                result_data = int(decoded, 16)
+            else:
+                result_data = decoded
+
+            if configuration.get("divider"):
+                result_data = float(result_data) / float(configuration["divider"])
+            if configuration.get("multiplier"):
+                result_data = result_data * configuration["multiplier"]
+            if configuration.get("addition"):
+                result_data = float(result_data) + float(configuration["addition"])
+
+            result_datas.append({
+                tag_: result_data
+            })
+
+        return result_datas

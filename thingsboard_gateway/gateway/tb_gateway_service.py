@@ -90,6 +90,8 @@ DEFAULT_CONNECTORS = {
     "socket": "SocketConnector",
     "xmpp": "XMPPConnector",
     "ocpp": "OcppConnector",
+    "iec104": "Iec104Connector",
+    "pluginsc": "PluginscConnector",
 }
 
 DEFAULT_STATISTIC = {

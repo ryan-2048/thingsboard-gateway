@@ -50,7 +50,7 @@ setup(
               'thingsboard_gateway.extensions.serial', 'thingsboard_gateway.extensions.request',
               'thingsboard_gateway.extensions.can', 'thingsboard_gateway.extensions.bacnet', 'thingsboard_gateway.extensions.odbc',
               'thingsboard_gateway.extensions.rest',  'thingsboard_gateway.extensions.snmp', 'thingsboard_gateway.extensions.ftp',
-              'thingsboard_gateway.extensions.socket', 'thingsboard_gateway.extensions.xmpp', 'thingsboard_gateway.gateway.statistics'
+              'thingsboard_gateway.extensions.socket', 'thingsboard_gateway.extensions.xmpp', 'thingsboard_gateway.gateway.statistics', 'thingsboard_gateway.connectors.iec104', 'thingsboard_gateway.connectors.pluginsc'
               ],
     install_requires=[
         'cryptography',

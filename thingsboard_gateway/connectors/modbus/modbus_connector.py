@@ -114,9 +114,9 @@ FUNCTION_CODE_READ = {
 
 
 class ModbusConnector(Connector, Thread):
-    process_requests = Queue(-1)
 
     def __init__(self, gateway, config, connector_type):
+        self.process_requests = Queue(-1)
         self.statistics = {STATISTIC_MESSAGE_RECEIVED_PARAMETER: 0,
                            STATISTIC_MESSAGE_SENT_PARAMETER: 0}
         super().__init__()
@@ -261,14 +261,13 @@ class ModbusConnector(Connector, Thread):
 
     def __load_slave(self, slave):
         slave_config = {**slave, 'connector': self, 'gateway': self.__gateway, 'logger': self.__log,
-                        'callback': ModbusConnector.callback}
+                        'callback': self.callback}
         if REPORT_STRATEGY_PARAMETER not in slave_config:
             slave_config[REPORT_STRATEGY_PARAMETER] = self.__main_report_strategy
         self.__slaves.append(Slave(**slave_config))
 
-    @classmethod
-    def callback(cls, slave: Slave, request_type: RequestType, data=None):
-        cls.process_requests.put((slave, request_type, data))
+    def callback(self, slave: Slave, request_type: RequestType, data=None):
+        self.process_requests.put((slave, request_type, data))
 
     @property
     def connector_type(self):
@@ -310,7 +309,8 @@ class ModbusConnector(Connector, Thread):
                    TELEMETRY_PARAMETER: [],
                    ATTRIBUTES_PARAMETER: []
                    }
-
+        if len(converted_data['attributes']) > 0:
+            converted_data['attributes'].append({'lastDataTs': int(time() * 1000)})
         # Check report strategy for each key in attributes and telemetry for device and send data only if it is necessary
         for converted_data_section in CONVERTED_DATA_SECTIONS:
             for current_section_dict in converted_data[converted_data_section]:
@@ -361,10 +361,10 @@ class ModbusConnector(Connector, Thread):
 
     def __process_slaves(self):
         while not self.__stopped:
-            if not self.__stopped and not ModbusConnector.process_requests.empty():
-                (device, request_type, data) = ModbusConnector.process_requests.get()
+            if not self.__stopped and not self.process_requests.empty():
+                (device, request_type, data) = self.process_requests.get()
                 if request_type == RequestType.POLL:
-                    self.__poll_device(device)
+                    self.__poll_device(device, data)
                 elif request_type == RequestType.SEND_DATA:
                     self.__send_data_from_device_by_strategy(device, data)
             sleep(.001)
@@ -374,7 +374,7 @@ class ModbusConnector(Connector, Thread):
         self.statistics[STATISTIC_MESSAGE_SENT_PARAMETER] += 1
 
 
-    def __poll_device(self, device):
+    def __poll_device(self, device, point_data):
         device_connected = device.last_connect_time != 0 and monotonic() - device.last_connect_time < 10
         device_disconnected = False
 
@@ -385,60 +385,59 @@ class ModbusConnector(Connector, Thread):
         device_responses = {'timeseries': {}, 'attributes': {}}
         current_device_config = {}
         try:
-            for config_section in device_responses:
-                if device.config.get(config_section) is not None and len(device.config.get(config_section)):
-                    current_device_config = device.config
-                    connected_to_current_master = self.__connect_to_current_master(device)
-                    if connected_to_current_master:
-                        is_socket_open = device.config['master'].is_socket_open()
-                        if not device_connected and is_socket_open:
-                            device_connected = self.__gateway.add_device(device.device_name, {CONNECTOR_PARAMETER: self},
-                                                                         device_type=device.config.get(DEVICE_TYPE_PARAMETER))
+            config_section = point_data['type']
+            if device.config.get(config_section) is not None and len(device.config.get(config_section)):
+                current_device_config = device.config
+                connected_to_current_master = self.__connect_to_current_master(device)
+                if connected_to_current_master:
+                    is_socket_open = device.config['master'].is_socket_open()
+                    if not device_connected and is_socket_open:
+                        # device_connected = self.__gateway.add_device(device.device_name, {CONNECTOR_PARAMETER: self},
+                        #                                                 device_type=device.config.get(DEVICE_TYPE_PARAMETER))
 
-                            device.last_connect_time = monotonic() if device_connected else 0
-                        elif not is_socket_open:
-                            device.last_connect_time = 0
-                            device_disconnected = True
+                        device.last_connect_time = monotonic() if device_connected else 0
+                    elif not is_socket_open:
+                        device.last_connect_time = 0
+                        device_disconnected = True
+                else:
+                    if not device_disconnected:
+                        device.last_connect_time = 0
+                        device_disconnected = True
+                        self.__gateway.del_device(device.device_name)
+                    return
+
+                if (not device.config['master'].is_socket_open()
+                        or not len(current_device_config[config_section])):
+                    if not device.config['master'].is_socket_open():
+                        error = 'Socket is closed, connection is lost, for device %s with config %s' % (
+                            device.device_name, current_device_config)
                     else:
-                        if not device_disconnected:
-                            device.last_connect_time = 0
-                            device_disconnected = True
-                            self.__gateway.del_device(device.device_name)
-                        continue
+                        error = 'Config is invalid or empty for device %s, config %s' % (
+                            device.device_name, current_device_config)
+                    self.__log.error(error)
+                    self.__log.debug("Device %s is not connected, data will not be processed",
+                                        device.device_name)
+                    return
 
-                    if (not device.config['master'].is_socket_open()
-                            or not len(current_device_config[config_section])):
-                        if not device.config['master'].is_socket_open():
-                            error = 'Socket is closed, connection is lost, for device %s with config %s' % (
-                                device.device_name, current_device_config)
-                        else:
-                            error = 'Config is invalid or empty for device %s, config %s' % (
-                                device.device_name, current_device_config)
-                        self.__log.error(error)
-                        self.__log.debug("Device %s is not connected, data will not be processed",
-                                         device.device_name)
-                        continue
+                # Reading data from device
+                current_data = deepcopy(current_device_config[config_section][point_data['index']])
+                current_data[DEVICE_NAME_PARAMETER] = device.device_name
+                input_data = self.__function_to_device(device, current_data)
 
-                    # Reading data from device
-                    for interested_data in range(len(current_device_config[config_section])):
-                        current_data = deepcopy(current_device_config[config_section][interested_data])
-                        current_data[DEVICE_NAME_PARAMETER] = device.device_name
-                        input_data = self.__function_to_device(device, current_data)
+                # due to issue #1056
+                if isinstance(input_data, ModbusIOException) or isinstance(input_data, ExceptionResponse):
+                    device.config.pop('master', None)
+                    self.__gateway.del_device(device.device_name)
+                    self.__connect_to_current_master(device)
+                    return
 
-                        # due to issue #1056
-                        if isinstance(input_data, ModbusIOException) or isinstance(input_data, ExceptionResponse):
-                            device.config.pop('master', None)
-                            self.__gateway.del_device(device.device_name)
-                            self.__connect_to_current_master(device)
-                            break
+                device_responses[config_section][current_data[TAG_PARAMETER]] = {
+                    "data_sent": current_data,
+                    "input_data": input_data
+                }
 
-                        device_responses[config_section][current_data[TAG_PARAMETER]] = {
-                            "data_sent": current_data,
-                            "input_data": input_data
-                        }
-
-                    self.__log.debug("Checking %s for device %s", config_section, device)
-                    self.__log.debug('Device response: ', device_responses)
+                self.__log.debug("Checking %s for device %s", config_section, device)
+                self.__log.debug('Device response: ', device_responses)
 
             if device_responses.get('timeseries') or device_responses.get('attributes'):
                 self._convert_msg_queue.put((self.__convert_data, (device, current_device_config, {
@@ -628,7 +627,7 @@ class ModbusConnector(Connector, Thread):
             self.__log.info("Trying to reconnect to device %s", device.device_name)
             if device.config.get('master') is not None and device.config['master'].is_socket_open():
                 device.config['master'].close()
-                device.config['master'], device.config['available_functions'] = self.__get_or_create_connection(device.config, force=True)
+            device.config['master'], device.config['available_functions'] = self.__get_or_create_connection(device.config, force=True)
             if self.__connect_to_current_master(device):
                 self.__log.info("Reconnected to device %s", device.device_name)
                 result = self.__function_to_device(device, config)
@@ -636,8 +635,8 @@ class ModbusConnector(Connector, Thread):
                     self.__log.error("Reading failed for device %s function code %s address %s unit id %s",
                                      device.device_name, function_code, config[ADDRESS_PARAMETER], device.config['unitId'])
                     self.__log.error("Reading failed with exception:", exc_info=result)
-                if device.config.get('master') is not None and device.config['master'].is_socket_open():
-                    device.config['master'].close()
+                    if device.config.get('master') is not None and device.config['master'].is_socket_open():
+                        device.config['master'].close()
                     device.config['master'] = None
                     self.__log.info("Will try to connect to device %s later", device.device_name)
 
@@ -869,7 +868,7 @@ class ModbusConnector(Connector, Thread):
                     convert_function, params = self.__msg_queue.get(True, 10)
                     converted_data = convert_function(params)
                     if converted_data:
-                        self._log.info(converted_data)
+                        self._log.debug(converted_data)
                         self.__send_result(converted_data)
                         self.in_progress = False
                 else:
