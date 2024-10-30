@@ -50,6 +50,9 @@ class Slave(Thread):
             if item.get('pollPeriod') is None:
                 item['pollPeriod'] = self.poll_period;
             if  attributes_current_group is None or item['pollPeriod'] != attributes_current_group['pollPeriod'] or item['address'] - attributes_last_address > attributes_current_group['details'][-1]['objectsCount'] or len(attributes_current_group['details']) >= once_register_count:
+                if attributes_current_group is not None:
+                    attributes_current_group['objectsCount'] = sum(detail['objectsCount'] for detail in attributes_current_group['details'])
+                    attributes_data_result.append(attributes_current_group)
                 attributes_current_group = {
                     'tag': len(attributes_data_result),
                     'functionCode': item['functionCode'],
@@ -75,6 +78,9 @@ class Slave(Thread):
 
         for item in timeseries_sorted_data:
             if timeseries_current_group is None or item['pollPeriod'] != timeseries_current_group['pollPeriod'] or item['address'] - timeseries_last_address > timeseries_current_group['details'][-1]['objectsCount'] or len(timeseries_current_group['details']) >= once_register_count:
+                if timeseries_current_group is not None:
+                    timeseries_current_group['objectsCount'] = sum(detail['objectsCount'] for detail in timeseries_current_group['details'])
+                    timeseries_data_result.append(timeseries_current_group)
                 timeseries_current_group = {
                     'tag': len(timeseries_data_result),
                     'functionCode': item['functionCode'],

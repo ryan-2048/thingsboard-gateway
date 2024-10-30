@@ -184,7 +184,7 @@ class StatisticsService(Thread):
         statistics_message = {'machineStats': self.__collect_statistics_from_config(MACHINE_STATS_CONFIG),
                               'serviceStats': self.__collect_service_statistics(),
                               'connectorsStats': self.CONNECTOR_STATISTICS_STORAGE}
-        self._log.info('REGULAR STATS: %s', statistics_message)
+        self._log.debug('REGULAR STATS: %s', statistics_message)
         self._gateway.send_telemetry(statistics_message)
 
     def __send_general_machine_state(self):
