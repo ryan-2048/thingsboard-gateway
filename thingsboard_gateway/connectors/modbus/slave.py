@@ -40,7 +40,11 @@ class Slave(Thread):
         timeseries_data = kwargs.get('timeseries', [])
         once_register_count = kwargs.get('onceRegisterCount', 100)
         
-        attributes_sorted_data = sorted(attributes_data, key=lambda x: x['address'])
+        # attributes_sorted_data = sorted(attributes_data, key=lambda x: x['address'])
+        attributes_sorted_data = sorted(
+            attributes_data,
+            key=lambda x: (x.get('functionCode', 0), x.get('address', 0))
+        )
 
         attributes_data_result = []
         attributes_current_group = None
@@ -49,7 +53,7 @@ class Slave(Thread):
         for item in attributes_sorted_data:
             if item.get('pollPeriod') is None:
                 item['pollPeriod'] = self.poll_period;
-            if  attributes_current_group is None or item['pollPeriod'] != attributes_current_group['pollPeriod'] or item['address'] - attributes_last_address > attributes_current_group['details'][-1]['objectsCount'] or len(attributes_current_group['details']) >= once_register_count:
+            if  attributes_current_group is None or item['functionCode'] != attributes_current_group['functionCode'] or item['pollPeriod'] != attributes_current_group['pollPeriod'] or item['address'] - attributes_last_address > attributes_current_group['details'][-1]['objectsCount'] or len(attributes_current_group['details']) >= once_register_count:
                 if attributes_current_group is not None:
                     attributes_current_group['objectsCount'] = sum(detail['objectsCount'] for detail in attributes_current_group['details'])
                     attributes_data_result.append(attributes_current_group)
@@ -70,14 +74,18 @@ class Slave(Thread):
             attributes_current_group['objectsCount'] = sum(detail['objectsCount'] for detail in attributes_current_group['details'] if (attributes_prev_address != detail['address']) and (attributes_prev_address := detail['address']) is not None)
             attributes_data_result.append(attributes_current_group)
 
-        timeseries_sorted_data = sorted(timeseries_data, key=lambda x: x['address'])
+        # timeseries_sorted_data = sorted(timeseries_data, key=lambda x: x['address'])
+        timeseries_sorted_data = sorted(
+            timeseries_data,
+            key=lambda x: (x.get('functionCode', 0), x.get('address', 0))
+        )
 
         timeseries_data_result = []
         timeseries_current_group = None
         timeseries_last_address = -1
 
         for item in timeseries_sorted_data:
-            if timeseries_current_group is None or item['pollPeriod'] != timeseries_current_group['pollPeriod'] or item['address'] - timeseries_last_address > timeseries_current_group['details'][-1]['objectsCount'] or len(timeseries_current_group['details']) >= once_register_count:
+            if timeseries_current_group is None or item['functionCode'] != timeseries_current_group['functionCode'] or item['pollPeriod'] != timeseries_current_group['pollPeriod'] or item['address'] - timeseries_last_address > timeseries_current_group['details'][-1]['objectsCount'] or len(timeseries_current_group['details']) >= once_register_count:
                 if timeseries_current_group is not None:
                     timeseries_current_group['objectsCount'] = sum(detail['objectsCount'] for detail in timeseries_current_group['details'])
                     timeseries_data_result.append(timeseries_current_group)
@@ -97,7 +105,7 @@ class Slave(Thread):
         if timeseries_current_group is not None:
             timeseries_current_group['objectsCount'] = sum(detail['objectsCount'] for detail in timeseries_current_group['details'] if (timeseries_prev_address != detail['address']) and (timeseries_prev_address := detail['address']) is not None)
             timeseries_data_result.append(timeseries_current_group)
-
+        
         self.config = {
             'unitId': kwargs['unitId'],
             'deviceType': kwargs.get('deviceType', 'default'),
