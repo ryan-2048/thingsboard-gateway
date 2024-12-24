@@ -168,11 +168,16 @@ class BytesModbusUplinkConverter(ModbusConverter):
                         decoded += decoded_lastbyte
                     elif configuration['functionCode'] in [1, 2]:
                         decoded = decoder_functions[type_]()
-                        decoded_lastbyte = decoder_functions[type_]()
-                        decoded += decoded_lastbyte
-                        decodeds[:0] = decoded
-                        # decoded = decoded[len(decoded)-objects_count:]
-                        decoded = decodeds.pop()
+                        if len(decoded) > 0:
+                            decoded.reverse()
+                        decodeds.extend(decoded)
+                        decoded = decodeds.pop(0)
+                        # decoded = decoder_functions[type_]()
+                        # decoded_lastbyte = decoder_functions[type_]()
+                        # decoded += decoded_lastbyte
+                        # decodeds[:0] = decoded
+                        # # decoded = decoded[len(decoded)-objects_count:]
+                        # decoded = decodeds.pop()
 
                 elif lower_type == "string":
                     decoded = decoder_functions[type_](objects_count * 2)
