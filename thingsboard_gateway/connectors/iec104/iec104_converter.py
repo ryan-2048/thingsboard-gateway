@@ -1,5 +1,4 @@
-from thingsboard_gateway.connectors.converter import Converter, abstractmethod, log
-
+from thingsboard_gateway.connectors.converter import Converter, abstractmethod
 
 class Iec104Converter(Converter):
     @abstractmethod

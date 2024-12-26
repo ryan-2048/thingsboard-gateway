@@ -1,13 +1,12 @@
-from thingsboard_gateway.connectors.iec104.iec104_converter import Iec104Converter, log
-from thingsboard_gateway.gateway.statistics_service import StatisticsService
+from thingsboard_gateway.connectors.iec104.iec104_converter import Iec104Converter
+from thingsboard_gateway.gateway.statistics.decorators import CollectStatistics
 
 class Iec104DownlinkConverter(Iec104Converter):
-    def __init__(self, config):
+    def __init__(self, config, logger):
+        self.__log = logger
         self.__config = config
 
-    @StatisticsService.CollectStatistics(start_stat_type='allReceivedBytesFromTB',  end_stat_type='allBytesSentToDevices')
+    @CollectStatistics(start_stat_type='allReceivedBytesFromTB',
+                       end_stat_type='allBytesSentToDevices')
     def convert(self, config, data):
-        try:
-            pass
-        except Exception as e:
-            log.exception(e)
+        pass

@@ -5,9 +5,11 @@ from time import sleep
 
 from thingsboard_gateway.connectors.pluginsc.pluginsc_lib import *
 
-from thingsboard_gateway.connectors.connector import Connector, log
+from thingsboard_gateway.connectors.connector import Connector
+
 from thingsboard_gateway.connectors.pluginsc.pluginsc_uplink_converter import PluginscUplinkConverter
 from thingsboard_gateway.connectors.pluginsc.pluginsc_downlink_converter import PluginscDownlinkConverter
+from thingsboard_gateway.tb_utility.tb_logger import init_logger
 
 
 class PluginscConnector(Connector, Thread):
@@ -17,13 +19,17 @@ class PluginscConnector(Connector, Thread):
         self.__config = config
         self._connector_type = connector_type
         self.__gateway = gateway
+        self.__log = init_logger(self.__gateway, config.get('name', self.name),
+                                 config.get('logLevel', 'INFO'),
+                                 enable_remote_logging=config.get('enableRemoteLogging', False))
         self.setName(self.__config.get("name", "".join(choice(ascii_lowercase) for _ in range(5))))
+        self.__id = self.__config.get('id')
         self.daemon = True
         self.__connected = False
         self.__stopped = False
 
-        self.__uplink_converter = PluginscUplinkConverter(self.__config)
-        self.__downlink_converter = PluginscDownlinkConverter(self.__config)
+        self.__uplink_converter = PluginscUplinkConverter(self.__config, self.__log)
+        self.__downlink_converter = PluginscDownlinkConverter(self.__config, self.__log)
 
         self.monitor = LgProtocolMonitor_create(self.__config.get("protocolName"), self.__config.get("cfgFileName"))
         self.p_connectionHandler = LgProtocolMonitor_ConnectionHandler(self.__connectionHandler)
@@ -46,21 +52,30 @@ class PluginscConnector(Connector, Thread):
 
     def on_attributes_update(self, content):
         try:
-            log.debug(content)
+            self.__log.debug(content)
             for key, value in content.get("data").items():
-                LgProtocolMonitor_control(self.monitor, self.__downlink_converter.convert(value))
+                LgProtocolMonitor_control(self.monitor, self.__downlink_converter.convert(value, self.__log))
         except Exception as e:
-            log.exception(e)
+            self.__log.exception(e)
 
     def server_side_rpc_handler(self, content):
         try:
-            log.debug(content)
+            self.__log.debug(content)
         except Exception as e:
-            log.exception(e)
+            self.__log.exception(e)
 
     def open(self):
         self.__stopped = False
         self.start()
+
+    def get_type(self):
+        return self._connector_type
+    
+    def get_id(self):
+        return self.__id
+    
+    def is_stopped(self):
+        return self.__stopped
 
     def get_name(self):
         return self.name
@@ -79,6 +94,6 @@ class PluginscConnector(Connector, Thread):
     
     def __convert_data(self, data):
         data_to_send = self.__uplink_converter.convert(data)
-        log.debug(data_to_send)
+        self.__log.debug(data_to_send)
         if data_to_send is not None:
-            self.__gateway.send_to_storage(self.get_name(), data_to_send)
+            self.__gateway.send_to_storage(self.get_name())

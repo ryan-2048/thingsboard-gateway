@@ -1,13 +1,15 @@
-from thingsboard_gateway.connectors.iec104.iec104_converter import Iec104Converter, log
-from thingsboard_gateway.gateway.statistics_service import StatisticsService
+from thingsboard_gateway.connectors.iec104.iec104_converter import Iec104Converter
+from thingsboard_gateway.gateway.statistics.decorators import CollectStatistics
 
 
 class Iec104UplinkConverter(Iec104Converter):
-    def __init__(self, config):
+    def __init__(self, config, logger):
+        self.__log = logger
         self.__config = config
         self.__datatypes = {"timeseries": "telemetry", "attributes": "attributes"}
 
-    @StatisticsService.CollectStatistics(start_stat_type='receivedBytesFromDevices', end_stat_type='convertedBytesFromDevice')
+    @CollectStatistics(start_stat_type='receivedBytesFromDevices',
+                       end_stat_type='convertedBytesFromDevice')
     def convert(self, data):
 
         dict_result = {"deviceName": None, "deviceType": None, "attributes": [], "telemetry": []}
@@ -31,7 +33,7 @@ class Iec104UplinkConverter(Iec104Converter):
                         dict_result[self.__datatypes[datatype]].append({object_config['key']: decoded_data})
                         have_data_flag = True
         except Exception as e:
-            log.exception(e)
+            self.__log.exception(e)
 
         if (have_data_flag):
             return dict_result
