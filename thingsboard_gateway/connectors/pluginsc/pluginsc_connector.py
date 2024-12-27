@@ -96,4 +96,4 @@ class PluginscConnector(Connector, Thread):
         data_to_send = self.__uplink_converter.convert(data)
         self.__log.debug(data_to_send)
         if data_to_send is not None:
-            self.__gateway.send_to_storage(self.get_name())
+            self.__gateway.send_to_storage(self.get_name(), self.get_id(), data_to_send)

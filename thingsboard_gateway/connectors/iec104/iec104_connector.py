@@ -310,6 +310,6 @@ class Iec104Connector(Connector, Thread):
     def __convert_data(self, data):
         data_to_send = self.__uplink_converter.convert(data)
         if data_to_send is not None:
-            res = self.__gateway.send_to_storage(self.get_name(), data_to_send)
+            res = self.__gateway.send_to_storage(self.get_name(), self.get_id(), data_to_send)
             self.__log.debug(data_to_send)
             self.__log.debug(res)
