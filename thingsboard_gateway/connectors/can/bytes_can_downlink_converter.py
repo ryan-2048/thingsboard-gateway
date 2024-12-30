@@ -62,7 +62,11 @@ class BytesCanDownlinkConverter(CanConverter):
                 else:
                     can_data.extend(struct.pack(">f" if byteorder[0] == "b" else "<f", value))
             elif isinstance(value, str):
-                can_data.extend(value.encode(config["dataEncoding"] if config.get("dataEncoding", "") else "ascii"))
+                if (value.startswith('0x')):
+                    value = value.replace('0x', '')
+                    can_data.extend(bytearray.fromhex(value))
+                else:
+                    can_data.extend(value.encode(config["dataEncoding"] if config.get("dataEncoding", "") else "ascii"))
 
             if config.get("dataAfter", ""):
                 can_data.extend(bytearray.fromhex(config["dataAfter"]))
